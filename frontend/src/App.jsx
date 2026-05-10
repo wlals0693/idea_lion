@@ -1,0 +1,1263 @@
+import { useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
+import './App.css';
+
+const scoreWeights = [
+  { key: 'capability', label: '기초 역량', weight: 40 },
+  { key: 'experience', label: '활동 경험', weight: 30 },
+  { key: 'growth', label: '성장 방향', weight: 15 },
+  { key: 'schedule', label: '준비 일정', weight: 15 },
+];
+
+function App() {
+  const [currentPage, setCurrentPage] = useState('home');
+  const [savedProfile, setSavedProfile] = useState(null);
+  const [analysisResult, setAnalysisResult] = useState(null);
+
+  useEffect(() => {
+    axios.get('http://localhost:8000/health').catch(() => {
+      console.warn('Health check failed.');
+    });
+  }, []);
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'profile':
+        return (
+          <ProfilePage
+            setCurrentPage={setCurrentPage}
+            setSavedProfile={setSavedProfile}
+          />
+        );
+      case 'posting':
+        return (
+          <PostingPage
+            setCurrentPage={setCurrentPage}
+            setAnalysisResult={setAnalysisResult}
+            savedProfile={savedProfile}
+          />
+        );
+      case 'loading':
+        return <LoadingPage setCurrentPage={setCurrentPage} />;
+      case 'result':
+        return (
+          <ResultPage
+            setCurrentPage={setCurrentPage}
+            analysisResult={analysisResult}
+          />
+        );
+      case 'history':
+        return (
+          <HistoryPage
+            setCurrentPage={setCurrentPage}
+            analysisResult={analysisResult}
+          />
+        );
+      case 'mypage':
+        return (
+          <MyPage setCurrentPage={setCurrentPage} savedProfile={savedProfile} />
+        );
+      case 'postingText':
+        return (
+          <PostingTextPage
+            setCurrentPage={setCurrentPage}
+            setAnalysisResult={setAnalysisResult}
+            savedProfile={savedProfile}
+          />
+        );
+      default:
+        return <HomePage setCurrentPage={setCurrentPage} />;
+    }
+  };
+
+  return (
+    <div className="app">
+      <Header currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <main className="main">{renderPage()}</main>
+    </div>
+  );
+}
+
+function Header({ currentPage, setCurrentPage }) {
+  const menus = [
+    { id: 'home', label: '홈' },
+    { id: 'profile', label: '내 정보' },
+    { id: 'posting', label: '공고 분석' },
+    { id: 'history', label: '분석 기록' },
+    { id: 'mypage', label: '마이페이지' },
+  ];
+
+  return (
+    <header className="header">
+      <button className="logo" onClick={() => setCurrentPage('home')}>
+        <span>FitCheck</span>
+      </button>
+
+      <nav>
+        {menus.map((menu) => (
+          <button
+            key={menu.id}
+            className={currentPage === menu.id ? 'nav active' : 'nav'}
+            onClick={() => setCurrentPage(menu.id)}
+          >
+            {menu.label}
+          </button>
+        ))}
+      </nav>
+    </header>
+  );
+}
+
+function HomePage({ setCurrentPage }) {
+  const steps = [
+    ['01', '내 정보 입력', '관심 분야와 활동 경험을 정리합니다.'],
+    ['02', '공고 입력', 'URL, PDF, 텍스트 중 편한 방식으로 넣습니다.'],
+    ['03', 'AI 분석', '공고 요구사항과 나의 준비도를 비교합니다.'],
+    ['04', '전략 확인', '보완할 점과 다음 액션을 확인합니다.'],
+  ];
+
+  return (
+    <section className="page home">
+      <div className="hero hero-simple">
+        <div className="hero-copy">
+          <span className="badge">AI 활동 적합도 분석</span>
+          <h1>지금 보고있는 공고 지원하실건가요?</h1>
+          <p>
+            공고를 보고 고민만 하던 시간을 줄이고, 지금 지원해도 괜찮은지와
+            무엇을 보완하면 좋을지 빠르게 확인하세요.
+          </p>
+
+          <div className="button-row">
+            <button
+              className="primary"
+              onClick={() => setCurrentPage('profile')}
+            >
+              내 정보 입력하기
+            </button>
+            <button
+              className="secondary"
+              onClick={() => setCurrentPage('posting')}
+            >
+              공고 분석 시작
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="step-grid">
+        {steps.map(([number, title, description]) => (
+          <div className="step-card" key={number}>
+            <span>{number}</span>
+            <h3>{title}</h3>
+            <p>{description}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ProfilePage({ setCurrentPage, setSavedProfile }) {
+  const [profile, setProfile] = useState({
+    status: '',
+    major: '',
+    experiences: '',
+  });
+  const [interestFields, setInterestFields] = useState([]);
+  const [goalActivities, setGoalActivities] = useState([]);
+  const [capabilities, setCapabilities] = useState([]);
+  const [experienceTypes, setExperienceTypes] = useState([]);
+  const [notice, setNotice] = useState(null);
+
+  const toggleItem = (list, setList, item) => {
+    if (list.includes(item)) {
+      setList(list.filter((value) => value !== item));
+    } else {
+      setList([...list, item]);
+    }
+  };
+
+  const handleChange = (field, value) => {
+    setProfile({
+      ...profile,
+      [field]: value,
+    });
+  };
+
+  const saveProfile = async () => {
+    const payload = {
+      status: profile.status,
+      major: profile.major,
+      interest_fields: interestFields,
+      goal_activities: goalActivities,
+      capabilities: capabilities,
+      experience_types: experienceTypes,
+      experiences: profile.experiences,
+    };
+
+    try {
+      const response = await axios.post(
+        'http://localhost:8000/profiles',
+        payload,
+      );
+
+      console.log('저장 응답:', response.data);
+      setSavedProfile(response.data.profile);
+      setNotice({
+        type: 'success',
+        message: '내 정보가 저장되었습니다. 이제 공고 분석을 시작할 수 있어요.',
+      });
+    } catch (error) {
+      console.error(error);
+      setNotice({
+        type: 'error',
+        message: '저장 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+      });
+    }
+  };
+
+  return (
+    <section className="page">
+      <PageTitle
+        title="내 정보 입력"
+        description="관심 분야와 활동 경험을 입력하면 공고와의 적합도를 더 정확하게 볼 수 있습니다."
+      />
+
+      {notice && <Notice type={notice.type}>{notice.message}</Notice>}
+
+      <div className="content-grid">
+        <div>
+          <section className="card">
+            <SectionHeader title="기본 정보" eyebrow="Profile" />
+            <div className="form-grid">
+              <Input
+                label="전공 / 계열"
+                placeholder="예: 정보보호학과, 유아교육과"
+                value={profile.major}
+                onChange={(e) => handleChange('major', e.target.value)}
+              />
+
+              <Input
+                label="현재 상태"
+                placeholder="예: 3학년, 휴학, 취업준비중"
+                value={profile.status}
+                onChange={(e) => handleChange('status', e.target.value)}
+              />
+            </div>
+          </section>
+
+          <section className="card">
+            <SectionHeader
+              title="관심 분야와 목표 활동"
+              eyebrow="Interest"
+              description="관심 있는 분야와 이번에 도전하고 싶은 활동을 선택하세요."
+            />
+            <ChipGroup
+              title="관심 분야"
+              chips={[
+                'IT/개발',
+                '보안/네트워크',
+                'AI/데이터',
+                '디자인',
+                '마케팅/콘텐츠',
+                '교육/멘토링',
+                '기획/창업',
+                '봉사/사회문제',
+              ]}
+              selectedItems={interestFields}
+              onToggle={(item) =>
+                toggleItem(interestFields, setInterestFields, item)
+              }
+            />
+
+            <ChipGroup
+              title="목표 활동"
+              chips={[
+                '공모전 참여',
+                '대외활동 합격',
+                '학습 프로그램 참여',
+                '부트캠프 참여',
+                '포트폴리오 강화',
+                '진로 탐색',
+              ]}
+              selectedItems={goalActivities}
+              onToggle={(item) =>
+                toggleItem(goalActivities, setGoalActivities, item)
+              }
+            />
+          </section>
+
+          <section className="card">
+            <SectionHeader
+              title="분야별 역량"
+              eyebrow="Skills"
+              description="공고 요구 조건과 비교할 수 있는 강점을 선택하세요."
+            />
+            <ChipGroup
+              title="역량 선택"
+              chips={[
+                '교육 봉사',
+                '멘토링',
+                '아동 지도',
+                '청소년 지도',
+                '수업 보조',
+                '교구 제작',
+                '발표 능력',
+                '소통 능력',
+                '상담 경험',
+                'Python',
+                'Linux',
+                'Figma',
+                'SNS 운영',
+              ]}
+              selectedItems={capabilities}
+              onToggle={(item) =>
+                toggleItem(capabilities, setCapabilities, item)
+              }
+            />
+          </section>
+
+          <section className="card">
+            <SectionHeader title="활동 경험" eyebrow="Experience" />
+            <ChipGroup
+              title="경험 유형"
+              chips={[
+                '개인 프로젝트',
+                '팀 프로젝트',
+                '동아리 활동',
+                '공모전 참여',
+                '대외활동',
+                '서포터즈',
+                '멘토링',
+                '봉사활동',
+                '스터디',
+              ]}
+              selectedItems={experienceTypes}
+              onToggle={(item) =>
+                toggleItem(experienceTypes, setExperienceTypes, item)
+              }
+            />
+
+            <Textarea
+              label="활동 상세 내용"
+              placeholder="활동명, 역할, 주요 활동 내용, 결과물 등을 입력하세요."
+              value={profile.experiences}
+              onChange={(e) => handleChange('experiences', e.target.value)}
+            />
+          </section>
+        </div>
+
+        <aside className="summary-card">
+          <SectionHeader title="입력 요약" eyebrow="Summary" />
+          <SummaryRow label="관심 분야" values={interestFields} />
+          <SummaryRow label="목표 활동" values={goalActivities} />
+          <SummaryRow label="선택 역량" values={capabilities} />
+          <SummaryRow label="경험 유형" values={experienceTypes} />
+          <div className="summary-note">
+            <span>활동 상세</span>
+            <p>{profile.experiences || '아직 입력된 활동 상세가 없습니다.'}</p>
+          </div>
+        </aside>
+      </div>
+
+      <div className="page-actions">
+        <button className="secondary" onClick={saveProfile}>
+          내 정보 저장
+        </button>
+        <button className="primary" onClick={() => setCurrentPage('posting')}>
+          공고 분석으로 이동
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function PostingPage({ setCurrentPage, setAnalysisResult, savedProfile }) {
+  const [url, setUrl] = useState('');
+  const [postingMessage, setPostingMessage] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const submitPostingUrl = async () => {
+    if (!url.trim()) {
+      setPostingMessage({ type: 'error', text: '공고 URL을 입력해주세요.' });
+      return;
+    }
+
+    if (!savedProfile) {
+      setPostingMessage({
+        type: 'error',
+        text: '내 정보를 먼저 저장해주세요. 사용자 정보가 있어야 정확한 분석이 가능합니다.',
+      });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setPostingMessage(null);
+
+    try {
+      const postingResponse = await axios.post(
+        'http://localhost:8000/postings/url',
+        {
+          user_id: 1,
+          url: url,
+        },
+      );
+
+      console.log('공고 URL 응답:', postingResponse.data);
+
+      if (!postingResponse.data.success) {
+        setPostingMessage({
+          type: 'error',
+          text:
+            postingResponse.data.message ||
+            'URL에서 공고 내용을 가져오지 못했습니다. PDF/텍스트 입력으로 진행할 수 있습니다.',
+        });
+        return;
+      }
+
+      const posting = postingResponse.data.posting;
+
+      const analysisResponse = await axios.post(
+        'http://localhost:8000/analysis/gemini',
+        {
+          user_profile: savedProfile,
+          posting_title: posting.title,
+          posting_type: posting.posting_type,
+          posting_text: posting.raw_text,
+        },
+      );
+
+      console.log('Gemini URL 분석 결과 응답:', analysisResponse.data);
+
+      if (analysisResponse.data.success) {
+        setAnalysisResult(analysisResponse.data.analysis);
+        setCurrentPage('loading');
+      } else {
+        setPostingMessage({
+          type: 'error',
+          text: analysisResponse.data.message || 'Gemini 분석에 실패했습니다.',
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      setPostingMessage({
+        type: 'error',
+        text: 'URL에서 공고 내용을 가져오지 못했습니다. PDF/텍스트 입력으로 진행할 수 있습니다.',
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  return (
+    <section className="page compact-page">
+      <PageTitle
+        title="공고 URL 분석"
+        description="공모전, 대외활동, 학습 지원 프로그램 공고 링크를 입력하세요."
+      />
+
+      <div className="card narrow">
+        <SectionHeader
+          title="URL로 공고 가져오기"
+          eyebrow="Posting"
+          description="링크에서 공고 내용을 추출한 뒤 내 정보와 바로 비교합니다."
+        />
+
+        <Input
+          label="공고 URL"
+          placeholder="https://example.com/posting"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+
+        <Notice type="info">
+          URL 분석이 어려운 페이지라면 PDF 파일이나 공고 본문을 직접 입력할 수
+          있습니다.
+        </Notice>
+
+        {postingMessage && (
+          <Notice type={postingMessage.type}>
+            {postingMessage.text}
+            {postingMessage.type === 'error' && (
+              <button
+                className="notice-action"
+                onClick={() => setCurrentPage('postingText')}
+              >
+                PDF/텍스트로 진행
+              </button>
+            )}
+          </Notice>
+        )}
+
+        <div className="button-column">
+          <button
+            className="primary"
+            onClick={submitPostingUrl}
+            disabled={isAnalyzing}
+          >
+            {isAnalyzing ? 'AI가 공고를 분석 중입니다...' : 'URL로 분석 시작'}
+          </button>
+
+          <button
+            className="secondary"
+            onClick={() => setCurrentPage('postingText')}
+          >
+            PDF/텍스트로 입력하기
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PostingTextPage({ setCurrentPage, setAnalysisResult, savedProfile }) {
+  const [postingForm, setPostingForm] = useState({
+    title: '',
+    posting_type: '학습 지원 프로그램',
+    content: '',
+  });
+  const [pdfFile, setPdfFile] = useState(null);
+  const [message, setMessage] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const handleChange = (field, value) => {
+    setPostingForm({
+      ...postingForm,
+      [field]: value,
+    });
+  };
+
+  const createGeminiAnalysis = async (posting, postingText) => {
+    if (!savedProfile) {
+      setMessage({
+        type: 'error',
+        text: '내 정보를 먼저 저장해주세요. 사용자 정보가 있어야 정확한 분석이 가능합니다.',
+      });
+      return;
+    }
+
+    const analysisResponse = await axios.post(
+      'http://localhost:8000/analysis/gemini',
+      {
+        user_profile: savedProfile,
+        posting_title: posting.title,
+        posting_type: posting.posting_type,
+        posting_text: postingText,
+      },
+    );
+
+    console.log('Gemini 분석 결과 응답:', analysisResponse.data);
+
+    if (analysisResponse.data.success) {
+      setAnalysisResult(analysisResponse.data.analysis);
+      setCurrentPage('loading');
+    } else {
+      setMessage({
+        type: 'error',
+        text: analysisResponse.data.message || 'Gemini 분석에 실패했습니다.',
+      });
+    }
+  };
+
+  const submitPosting = async () => {
+    if (!postingForm.title.trim()) {
+      setMessage({ type: 'error', text: '공고 제목을 입력해주세요.' });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setMessage(null);
+
+    try {
+      if (pdfFile) {
+        const formData = new FormData();
+        formData.append('user_id', 1);
+        formData.append('title', postingForm.title);
+        formData.append('posting_type', postingForm.posting_type);
+        formData.append('file', pdfFile);
+
+        const pdfResponse = await axios.post(
+          'http://localhost:8000/postings/pdf',
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          },
+        );
+
+        console.log('PDF 업로드 응답:', pdfResponse.data);
+
+        if (!pdfResponse.data.success) {
+          setMessage({ type: 'error', text: pdfResponse.data.message });
+          return;
+        }
+
+        await createGeminiAnalysis(
+          pdfResponse.data.posting,
+          pdfResponse.data.posting.extracted_text,
+        );
+
+        return;
+      }
+
+      if (!postingForm.content.trim()) {
+        setMessage({
+          type: 'error',
+          text: '공고 내용을 입력하거나 PDF 파일을 업로드해주세요.',
+        });
+        return;
+      }
+
+      const textResponse = await axios.post(
+        'http://localhost:8000/postings/text',
+        {
+          user_id: 1,
+          title: postingForm.title,
+          posting_type: postingForm.posting_type,
+          content: postingForm.content,
+        },
+      );
+
+      console.log('공고 텍스트 응답:', textResponse.data);
+
+      if (!textResponse.data.success) {
+        setMessage({ type: 'error', text: textResponse.data.message });
+        return;
+      }
+
+      await createGeminiAnalysis(
+        textResponse.data.posting,
+        postingForm.content,
+      );
+    } catch (error) {
+      console.error(error);
+      setMessage({
+        type: 'error',
+        text: '공고 전송 또는 분석 중 오류가 발생했습니다.',
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  return (
+    <section className="page compact-page">
+      <PageTitle
+        title="PDF/텍스트 입력"
+        description="PDF를 업로드하거나, 공고 내용을 직접 붙여넣으세요."
+      />
+
+      <div className="card narrow">
+        <SectionHeader title="공고 기본 정보" eyebrow="Manual input" />
+
+        <div className="form-grid">
+          <Input
+            label="공고 제목"
+            placeholder="예: 화이트햇 스쿨 교육생 모집"
+            value={postingForm.title}
+            onChange={(e) => handleChange('title', e.target.value)}
+          />
+
+          <label className="field">
+            <span>공고 유형</span>
+            <select
+              value={postingForm.posting_type}
+              onChange={(e) => handleChange('posting_type', e.target.value)}
+            >
+              <option>공모전</option>
+              <option>대외활동</option>
+              <option>학습 지원 프로그램</option>
+              <option>부트캠프</option>
+              <option>해커톤</option>
+              <option>서포터즈</option>
+              <option>멘토링</option>
+              <option>기타</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="input-split">
+          <label className="upload-box">
+            <span>PDF 업로드</span>
+            <strong>공고 PDF 파일 선택</strong>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                setPdfFile(file || null);
+                if (file) {
+                  setMessage({
+                    type: 'info',
+                    text: `${file.name} 파일이 선택되었습니다.`,
+                  });
+                }
+              }}
+            />
+          </label>
+
+          <div className="manual-input">
+            <Textarea
+              label="공고 내용 직접 입력"
+              placeholder="모집 대상, 요구 역량, 제출 서류, 활동 기간, 마감일 등이 포함된 공고 내용을 붙여넣으세요."
+              value={postingForm.content}
+              onChange={(e) => handleChange('content', e.target.value)}
+            />
+          </div>
+        </div>
+
+        {pdfFile && (
+          <div className="file-chip">
+            <span>선택한 파일</span>
+            <strong>{pdfFile.name}</strong>
+          </div>
+        )}
+
+        <Notice type="info">
+          PDF가 선택되어 있으면 PDF 내용을 우선 분석하고, PDF가 없으면 입력한
+          텍스트를 기준으로 분석합니다.
+        </Notice>
+
+        {message && <Notice type={message.type}>{message.text}</Notice>}
+
+        <div className="button-column">
+          <button
+            className="primary"
+            onClick={submitPosting}
+            disabled={isAnalyzing}
+          >
+            {isAnalyzing ? 'AI가 공고를 분석 중입니다...' : '분석 시작하기'}
+          </button>
+
+          <button
+            className="secondary"
+            onClick={() => setCurrentPage('posting')}
+          >
+            URL 입력으로 돌아가기
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LoadingPage({ setCurrentPage }) {
+  const steps = [
+    '공고 내용 추출 중',
+    '사용자 정보 비교 중',
+    '항목별 적합도 계산 중',
+    '준비 전략 생성 중',
+  ];
+
+  return (
+    <section className="page center">
+      <div className="card loading-card">
+        <SectionHeader
+          title="AI가 공고를 분석 중입니다"
+          eyebrow="Analyzing"
+          description="입력한 정보와 공고 요구사항을 비교해 결과 화면을 준비하고 있습니다."
+        />
+        <div className="progress">
+          <div className="progress-bar" />
+        </div>
+        <div className="analysis-steps">
+          {steps.map((step, index) => (
+            <div className="analysis-step" key={step}>
+              <span>{index + 1}</span>
+              <p>{step}</p>
+            </div>
+          ))}
+        </div>
+        <button className="primary" onClick={() => setCurrentPage('result')}>
+          결과 확인하기
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ResultPage({ setCurrentPage, analysisResult }) {
+  const scoreCards = useMemo(() => {
+    if (!analysisResult?.scores) {
+      return [];
+    }
+
+    return scoreWeights
+      .map((item) => ({
+        ...item,
+        ...(analysisResult.scores[item.key] || {}),
+      }))
+      .filter((item) => item.title || item.score !== undefined);
+  }, [analysisResult]);
+
+  if (!analysisResult) {
+    return (
+      <section className="page">
+        <PageTitle
+          title="분석 결과 리포트"
+          description="아직 생성된 분석 결과가 없습니다."
+        />
+
+        <div className="card">
+          <Notice type="info">
+            분석 결과가 없습니다. 공고 분석을 먼저 진행해주세요.
+          </Notice>
+
+          <div className="page-actions">
+            <button
+              className="primary"
+              onClick={() => setCurrentPage('posting')}
+            >
+              공고 분석하러 가기
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="page">
+      <PageTitle
+        title="분석 결과 리포트"
+        description="입력된 정보와 공고 내용을 바탕으로 적합도와 준비 전략을 정리했습니다."
+      />
+
+      <div className="result-summary">
+        <div className="result-main">
+          <span className="badge">분석 완료</span>
+          <h2>{analysisResult.posting_title || '공고명 미확인'}</h2>
+          <p>{analysisResult.summary || '분석 요약이 제공되지 않았습니다.'}</p>
+        </div>
+        <div className="result-metrics">
+          <Metric
+            label="총합 적합도"
+            value={`${analysisResult.total_score ?? '-'}%`}
+          />
+          <Metric
+            label="분석 신뢰도"
+            value={analysisResult.confidence || '-'}
+          />
+          <Metric
+            label="공고 난이도"
+            value={analysisResult.difficulty || '보통'}
+          />
+        </div>
+      </div>
+
+      <section className="card">
+        <SectionHeader
+          title="종합 적합도 산출 기준"
+          eyebrow="Scoring"
+          description="기초 역량, 활동 경험, 성장 방향, 준비 일정을 가중치로 반영합니다."
+        />
+        <div className="weight-grid">
+          {scoreWeights.map((item) => (
+            <div className="weight-card" key={item.key}>
+              <div>
+                <span>{item.label}</span>
+                <strong>{item.weight}%</strong>
+              </div>
+              <div className="mini-bar">
+                <div style={{ width: `${item.weight * 2}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="score-grid">
+        {scoreCards.map((card) => (
+          <ScoreCard key={card.key} card={card} />
+        ))}
+      </div>
+
+      <div className="grid-2">
+        {scoreCards.map((card) => (
+          <section className="card weak-card" key={`${card.key}-weak`}>
+            <SectionHeader
+              title={`${card.title || card.label} 보완 필요 요소`}
+              eyebrow="Needs"
+            />
+            <ul className="clean-list">
+              {(
+                card.weak_factors || ['추가 보완 요소가 제공되지 않았습니다.']
+              ).map((factor) => (
+                <li key={factor}>{factor}</li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+
+      <section className="card action-card">
+        <SectionHeader
+          title="최종 추천 액션"
+          eyebrow="Next action"
+          description={analysisResult.recommendation?.status}
+        />
+        <div className="checklist">
+          {(
+            analysisResult.recommendation?.priority_actions || [
+              '공고 요구사항을 다시 확인하고 준비 일정을 세워보세요.',
+            ]
+          ).map((action) => (
+            <label key={action}>
+              <input type="checkbox" readOnly />
+              <span>{action}</span>
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <Notice type="info">
+        본 결과는 입력된 정보와 공고 내용을 바탕으로 한 참고용 분석입니다.
+        가능성을 현실로 만드는 것은 사용자님의 준비와 노력입니다.
+      </Notice>
+
+      <div className="page-actions">
+        <button className="secondary" onClick={() => setCurrentPage('posting')}>
+          재분석하기
+        </button>
+        <button className="primary" onClick={() => setCurrentPage('mypage')}>
+          마이페이지에서 보기
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function HistoryPage({ setCurrentPage, analysisResult }) {
+  return (
+    <section className="page">
+      <PageTitle
+        title="분석 기록"
+        description="이번 세션에서 분석한 공고 결과를 기록 카드로 확인합니다."
+      />
+
+      {analysisResult ? (
+        <div className="history-card">
+          <div>
+            <span className="badge subtle">
+              {analysisResult.posting_type || '분석 결과'}
+            </span>
+            <h3>{analysisResult.posting_title || '공고명 미확인'}</h3>
+            <p>
+              종합 적합도 {analysisResult.total_score ?? '-'}% · 마감일{' '}
+              {analysisResult.deadline || '미확인'}
+            </p>
+          </div>
+          <button
+            className="secondary"
+            onClick={() => setCurrentPage('result')}
+          >
+            다시 보기
+          </button>
+        </div>
+      ) : (
+        <EmptyState
+          title="아직 분석 기록이 없습니다."
+          description="공고를 분석하면 이곳에 기록됩니다."
+          actionLabel="공고 분석하기"
+          onAction={() => setCurrentPage('posting')}
+        />
+      )}
+    </section>
+  );
+}
+
+function MyPage({ setCurrentPage, savedProfile }) {
+  const tagSections = [
+    ['관심 분야', savedProfile?.interest_fields],
+    ['목표 활동', savedProfile?.goal_activities],
+    ['역량', savedProfile?.capabilities],
+    ['경험 유형', savedProfile?.experience_types],
+  ];
+
+  return (
+    <section className="page">
+      <PageTitle
+        title="마이페이지"
+        description="저장된 내 정보와 준비 방향을 한눈에 확인합니다."
+      />
+
+      <div className="grid-2">
+        <section className="card">
+          <SectionHeader title="내 프로필 요약" eyebrow="My profile" />
+
+          {savedProfile ? (
+            <>
+              <div className="profile-meta">
+                <div>
+                  <span>현재 상태</span>
+                  <strong>{savedProfile.status || '미입력'}</strong>
+                </div>
+                <div>
+                  <span>전공</span>
+                  <strong>{savedProfile.major || '미입력'}</strong>
+                </div>
+              </div>
+
+              {tagSections.map(([label, values]) => (
+                <SummaryRow key={label} label={label} values={values || []} />
+              ))}
+
+              <div className="summary-note">
+                <span>활동 경험</span>
+                <p>
+                  {savedProfile.experiences ||
+                    '아직 입력된 활동 경험이 없습니다.'}
+                </p>
+              </div>
+            </>
+          ) : (
+            <EmptyState
+              title="저장된 내 정보가 없습니다."
+              description="내 정보를 입력하면 공고 분석 정확도가 올라갑니다."
+              actionLabel="내 정보 입력"
+              onAction={() => setCurrentPage('profile')}
+            />
+          )}
+
+          {savedProfile && (
+            <div className="page-actions">
+              <button
+                className="secondary"
+                onClick={() => setCurrentPage('profile')}
+              >
+                내 정보 수정하기
+              </button>
+            </div>
+          )}
+        </section>
+
+        <section className="card growth-card">
+          <SectionHeader title="성장 방향 추천" eyebrow="Growth" />
+          {savedProfile ? (
+            <>
+              <p>
+                지금은 지원 범위를 넓히기보다 선택한 관심 분야와 연결되는 경험을
+                하나씩 쌓는 것이 좋습니다.
+              </p>
+              <div className="growth-point">
+                {savedProfile.interest_fields?.length > 0
+                  ? `${savedProfile.interest_fields[0]} 분야의 실습형 활동이나 작은 프로젝트를 우선 탐색해보세요.`
+                  : '관심 분야를 추가하면 더 구체적인 성장 방향을 추천할 수 있습니다.'}
+              </div>
+              <p className="helper">
+                분석 기록이 쌓이면 공고 난이도와 준비 기간을 더 정교하게 제안할
+                수 있습니다.
+              </p>
+            </>
+          ) : (
+            <p className="helper">
+              내 정보를 먼저 입력하면 현재 상태에 맞는 성장 방향을 확인할 수
+              있습니다.
+            </p>
+          )}
+        </section>
+      </div>
+
+      <section className="card">
+        <div className="calendar-head">
+          <SectionHeader title="준비 캘린더" eyebrow="Calendar" />
+          <div className="legend">
+            <span>
+              <i className="legend-blue" />
+              추천 준비 기간
+            </span>
+            <span>
+              <i className="legend-red" />
+              공고 마감일
+            </span>
+          </div>
+        </div>
+        <div className="calendar">
+          {Array.from({ length: 30 }, (_, i) => (
+            <div
+              key={i}
+              className={
+                i >= 9 && i <= 22
+                  ? 'day prepare'
+                  : i === 23
+                    ? 'day deadline'
+                    : 'day'
+              }
+            >
+              {i + 1}
+            </div>
+          ))}
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function PageTitle({ title, description }) {
+  return (
+    <div className="page-title">
+      <span>FitCheck</span>
+      <h1>{title}</h1>
+      <p>{description}</p>
+    </div>
+  );
+}
+
+function SectionHeader({ title, eyebrow, description }) {
+  return (
+    <div className="section-header">
+      {eyebrow && <span>{eyebrow}</span>}
+      <h2>{title}</h2>
+      {description && <p>{description}</p>}
+    </div>
+  );
+}
+
+function Input({ label, placeholder, value, onChange }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        placeholder={placeholder}
+        value={value || ''}
+        onChange={onChange}
+      />
+    </label>
+  );
+}
+
+function Textarea({ label, placeholder, value, onChange }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <textarea
+        placeholder={placeholder}
+        value={value || ''}
+        onChange={onChange}
+      />
+    </label>
+  );
+}
+
+function ChipGroup({ title, chips, selectedItems = [], onToggle }) {
+  return (
+    <div className="chip-group">
+      <h3>{title}</h3>
+      <div className="chips">
+        {chips.map((chip) => {
+          const isSelected = selectedItems.includes(chip);
+
+          return (
+            <button
+              key={chip}
+              type="button"
+              className={isSelected ? 'chip selected' : 'chip'}
+              onClick={() => {
+                if (onToggle) {
+                  onToggle(chip);
+                }
+              }}
+            >
+              {chip}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ScoreCard({ card }) {
+  const score = Number(card.score ?? 0);
+
+  return (
+    <section className="card score-card">
+      <div className="score-card-head">
+        <div>
+          <span>{card.label}</span>
+          <h2>{card.title || card.label}</h2>
+        </div>
+        <strong>{card.score ?? '-'}%</strong>
+      </div>
+      <div className="mini-bar">
+        <div style={{ width: `${Math.min(score, 100)}%` }} />
+      </div>
+      <div className="score-detail-grid">
+        <ScoreDetail label="공고 요구 수준" value={card.required_score} />
+        <ScoreDetail label="사용자 준비도" value={card.user_score} />
+      </div>
+      <div className="factor-block">
+        <span>긍정 요소</span>
+        <ul>
+          {(card.positive_factors || ['긍정 요소가 제공되지 않았습니다.']).map(
+            (item) => (
+              <li key={item}>{item}</li>
+            ),
+          )}
+        </ul>
+      </div>
+      {card.reason && (
+        <div className="reason-box">
+          <span>판단 근거</span>
+          <p>{card.reason}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ScoreDetail({ label, value }) {
+  return (
+    <div className="score-detail">
+      <span>{label}</span>
+      <strong>
+        {value !== undefined && value !== null ? `${value}%` : '-'}
+      </strong>
+    </div>
+  );
+}
+
+function Metric({ label, value }) {
+  return (
+    <div className="metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function Notice({ type = 'info', children }) {
+  return <div className={`notice ${type}`}>{children}</div>;
+}
+
+function SummaryRow({ label, values }) {
+  return (
+    <div className="summary-row">
+      <span>{label}</span>
+      <div className="tag-list">
+        {values?.length > 0 ? (
+          values.map((value) => <em key={value}>{value}</em>)
+        ) : (
+          <p>선택 없음</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ title, description, actionLabel, onAction }) {
+  return (
+    <div className="empty-state">
+      <h3>{title}</h3>
+      <p>{description}</p>
+      {actionLabel && (
+        <button className="primary" onClick={onAction}>
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default App;
