@@ -87,25 +87,6 @@ function App() {
   }, [accessToken]);
 
   const renderPage = () => {
-    const protectedPages = [
-      'profile',
-      'posting',
-      'postingText',
-      'history',
-      'mypage',
-    ];
-
-    if (protectedPages.includes(currentPage) && !authUser) {
-      return (
-        <AuthPage
-          setCurrentPage={setCurrentPage}
-          setAccessToken={setAccessToken}
-          setAuthUser={setAuthUser}
-          redirectPage={currentPage}
-        />
-      );
-    }
-
     switch (currentPage) {
       case 'profile':
         return (
@@ -179,7 +160,7 @@ function App() {
         logout={logout}
       />
       <main className="main">{renderPage()}</main>
-      {loginRequiredPage && (
+      {loginRequiredPage && currentPage !== 'auth' && (
         <ConfirmModal
           title="로그인이 필요합니다"
           description="내 정보 저장, 공고 분석, 분석 기록 확인은 로그인 후 이용할 수 있습니다."
@@ -1136,7 +1117,11 @@ function ResultPage({ setCurrentPage, analysisResult }) {
           />
           <Metric
             label="공고 난이도"
-            value={analysisResult.difficulty || '보통'}
+            value={
+              analysisResult.difficulty_level
+                ? `${analysisResult.difficulty_level} (${analysisResult.difficulty_score ?? '-'}점)`
+                : '보통'
+            }
           />
         </div>
       </div>
