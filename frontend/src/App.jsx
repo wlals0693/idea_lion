@@ -10,9 +10,50 @@ const scoreWeights = [
 ];
 
 function App() {
-  const [currentPage, setCurrentPage] = useState('home');
+  const [currentPage, setCurrentPage] = useState(
+    () => localStorage.getItem('fitcheckPage') || 'home',
+  );
   const [savedProfile, setSavedProfile] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
+  const [accessToken, setAccessToken] = useState(
+    () => localStorage.getItem('fitcheckToken') || '',
+  );
+
+  const [authUser, setAuthUser] = useState(() => {
+    const savedUser = localStorage.getItem('fitcheckUser');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
+  const logout = () => {
+    localStorage.removeItem('fitcheckToken');
+    localStorage.removeItem('fitcheckUser');
+    localStorage.removeItem('fitcheckPage');
+
+    setAccessToken('');
+    setAuthUser(null);
+    setSavedProfile(null);
+    setAnalysisResult(null);
+    setCurrentPage('home');
+  };
+
+  const protectedPages = [
+    'profile',
+    'posting',
+    'postingText',
+    'history',
+    'mypage',
+  ];
+
+  const movePage = (pageId) => {
+    if (protectedPages.includes(pageId) && !authUser) {
+      setLoginRequiredPage(pageId);
+      return;
+    }
+
+    setCurrentPage(pageId);
+  };
+
+  const [loginRequiredPage, setLoginRequiredPage] = useState(null);
 
   useEffect(() => {
     axios.get('http://localhost:8000/health').catch(() => {
@@ -20,13 +61,58 @@ function App() {
     });
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem('fitcheckPage', currentPage);
+  }, [currentPage]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+
+    axios
+      .get('http://localhost:8000/profiles/me', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+      .then((response) => {
+        if (response.data.success && response.data.profile) {
+          setSavedProfile(response.data.profile);
+        }
+      })
+      .catch((error) => {
+        console.error('프로필 불러오기 실패:', error);
+      });
+  }, [accessToken]);
+
   const renderPage = () => {
+    const protectedPages = [
+      'profile',
+      'posting',
+      'postingText',
+      'history',
+      'mypage',
+    ];
+
+    if (protectedPages.includes(currentPage) && !authUser) {
+      return (
+        <AuthPage
+          setCurrentPage={setCurrentPage}
+          setAccessToken={setAccessToken}
+          setAuthUser={setAuthUser}
+          redirectPage={currentPage}
+        />
+      );
+    }
+
     switch (currentPage) {
       case 'profile':
         return (
           <ProfilePage
             setCurrentPage={setCurrentPage}
             setSavedProfile={setSavedProfile}
+            accessToken={accessToken}
           />
         );
       case 'posting':
@@ -35,6 +121,7 @@ function App() {
             setCurrentPage={setCurrentPage}
             setAnalysisResult={setAnalysisResult}
             savedProfile={savedProfile}
+            accessToken={accessToken}
           />
         );
       case 'loading':
@@ -51,6 +138,8 @@ function App() {
           <HistoryPage
             setCurrentPage={setCurrentPage}
             analysisResult={analysisResult}
+            setAnalysisResult={setAnalysisResult}
+            accessToken={accessToken}
           />
         );
       case 'mypage':
@@ -63,22 +152,52 @@ function App() {
             setCurrentPage={setCurrentPage}
             setAnalysisResult={setAnalysisResult}
             savedProfile={savedProfile}
+            accessToken={accessToken}
+          />
+        );
+      case 'auth':
+        return (
+          <AuthPage
+            setCurrentPage={setCurrentPage}
+            setAccessToken={setAccessToken}
+            setAuthUser={setAuthUser}
+            redirectPage={loginRequiredPage || 'profile'}
+            clearLoginRequiredPage={() => setLoginRequiredPage(null)}
           />
         );
       default:
-        return <HomePage setCurrentPage={setCurrentPage} />;
+        return <HomePage setCurrentPage={movePage} />;
     }
   };
 
   return (
     <div className="app">
-      <Header currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <Header
+        currentPage={currentPage}
+        setCurrentPage={movePage}
+        authUser={authUser}
+        logout={logout}
+      />
       <main className="main">{renderPage()}</main>
+      {loginRequiredPage && (
+        <ConfirmModal
+          title="로그인이 필요합니다"
+          description="내 정보 저장, 공고 분석, 분석 기록 확인은 로그인 후 이용할 수 있습니다."
+          confirmText="로그인하기"
+          cancelText="닫기"
+          onConfirm={() => {
+            setCurrentPage('auth');
+          }}
+          onCancel={() => {
+            setLoginRequiredPage(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function Header({ currentPage, setCurrentPage }) {
+function Header({ currentPage, setCurrentPage, authUser, logout }) {
   const menus = [
     { id: 'home', label: '홈' },
     { id: 'profile', label: '내 정보' },
@@ -103,6 +222,19 @@ function Header({ currentPage, setCurrentPage }) {
             {menu.label}
           </button>
         ))}
+
+        {authUser ? (
+          <button className="nav auth-nav" onClick={logout}>
+            로그아웃
+          </button>
+        ) : (
+          <button
+            className={currentPage === 'auth' ? 'nav active' : 'nav auth-nav'}
+            onClick={() => setCurrentPage('auth')}
+          >
+            로그인
+          </button>
+        )}
       </nav>
     </header>
   );
@@ -157,7 +289,145 @@ function HomePage({ setCurrentPage }) {
   );
 }
 
-function ProfilePage({ setCurrentPage, setSavedProfile }) {
+function AuthPage({
+  setCurrentPage,
+  setAccessToken,
+  setAuthUser,
+  redirectPage = 'profile',
+  clearLoginRequiredPage,
+}) {
+  const [mode, setMode] = useState('login');
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+  });
+  const [notice, setNotice] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleChange = (field, value) => {
+    setForm({
+      ...form,
+      [field]: value,
+    });
+  };
+
+  const submitAuth = async () => {
+    if (!form.email.trim() || !form.password.trim()) {
+      setNotice({
+        type: 'error',
+        message: '이메일과 비밀번호를 입력해주세요.',
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    setNotice(null);
+
+    try {
+      const endpoint =
+        mode === 'login'
+          ? 'http://localhost:8000/auth/login'
+          : 'http://localhost:8000/auth/register';
+
+      const response = await axios.post(endpoint, {
+        email: form.email,
+        password: form.password,
+      });
+
+      const token = response.data.access_token;
+      const user = {
+        user_id: response.data.user_id,
+        email: response.data.email,
+      };
+
+      localStorage.setItem('fitcheckToken', token);
+      localStorage.setItem('fitcheckUser', JSON.stringify(user));
+
+      setAccessToken(token);
+      setAuthUser(user);
+
+      if (clearLoginRequiredPage) {
+        clearLoginRequiredPage();
+      }
+
+      setNotice({
+        type: 'success',
+        message:
+          mode === 'login' ? '로그인되었습니다.' : '회원가입이 완료되었습니다.',
+      });
+
+      setCurrentPage(redirectPage);
+    } catch (error) {
+      console.error(error);
+      setNotice({
+        type: 'error',
+        message:
+          error.response?.data?.detail ||
+          '로그인/회원가입 중 오류가 발생했습니다.',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <section className="page compact-page">
+      <PageTitle
+        title={mode === 'login' ? '로그인' : '회원가입'}
+        description="내 정보와 분석 기록을 저장하려면 로그인이 필요합니다."
+      />
+
+      <div className="card narrow">
+        <SectionHeader
+          title={mode === 'login' ? '계정 로그인' : '새 계정 만들기'}
+          eyebrow="Account"
+          description="분석 기록과 내 정보를 안전하게 저장합니다."
+        />
+
+        {notice && <Notice type={notice.type}>{notice.message}</Notice>}
+
+        <Input
+          label="이메일"
+          placeholder="example@email.com"
+          value={form.email}
+          onChange={(e) => handleChange('email', e.target.value)}
+        />
+
+        <Input
+          label="비밀번호"
+          placeholder="8자 이상 입력"
+          value={form.password}
+          onChange={(e) => handleChange('password', e.target.value)}
+          type="password"
+        />
+
+        <div className="button-column">
+          <button className="primary" onClick={submitAuth} disabled={isLoading}>
+            {isLoading
+              ? '처리 중...'
+              : mode === 'login'
+                ? '로그인하기'
+                : '회원가입하기'}
+          </button>
+
+          <button
+            className="secondary"
+            onClick={() => {
+              setMode(mode === 'login' ? 'register' : 'login');
+              setNotice(null);
+            }}
+          >
+            {mode === 'login'
+              ? '계정이 없나요? 회원가입'
+              : '이미 계정이 있나요? 로그인'}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProfilePage({ setCurrentPage, setSavedProfile, accessToken }) {
   const [profile, setProfile] = useState({
     status: '',
     major: '',
@@ -199,6 +469,11 @@ function ProfilePage({ setCurrentPage, setSavedProfile }) {
       const response = await axios.post(
         'http://localhost:8000/profiles',
         payload,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
       );
 
       console.log('저장 응답:', response.data);
@@ -372,7 +647,12 @@ function ProfilePage({ setCurrentPage, setSavedProfile }) {
   );
 }
 
-function PostingPage({ setCurrentPage, setAnalysisResult, savedProfile }) {
+function PostingPage({
+  setCurrentPage,
+  setAnalysisResult,
+  savedProfile,
+  accessToken,
+}) {
   const [url, setUrl] = useState('');
   const [postingMessage, setPostingMessage] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -424,6 +704,11 @@ function PostingPage({ setCurrentPage, setAnalysisResult, savedProfile }) {
           posting_title: posting.title,
           posting_type: posting.posting_type,
           posting_text: posting.raw_text,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
         },
       );
 
@@ -510,7 +795,12 @@ function PostingPage({ setCurrentPage, setAnalysisResult, savedProfile }) {
   );
 }
 
-function PostingTextPage({ setCurrentPage, setAnalysisResult, savedProfile }) {
+function PostingTextPage({
+  setCurrentPage,
+  setAnalysisResult,
+  savedProfile,
+  accessToken,
+}) {
   const [postingForm, setPostingForm] = useState({
     title: '',
     posting_type: '학습 지원 프로그램',
@@ -543,6 +833,11 @@ function PostingTextPage({ setCurrentPage, setAnalysisResult, savedProfile }) {
         posting_title: posting.title,
         posting_type: posting.posting_type,
         posting_text: postingText,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       },
     );
 
@@ -928,15 +1223,115 @@ function ResultPage({ setCurrentPage, analysisResult }) {
   );
 }
 
-function HistoryPage({ setCurrentPage, analysisResult }) {
+function HistoryPage({
+  setCurrentPage,
+  analysisResult,
+  setAnalysisResult,
+  accessToken,
+}) {
+  const [records, setRecords] = useState([]);
+  const [notice, setNotice] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setNotice({
+        type: 'error',
+        text: '분석 기록을 보려면 로그인이 필요합니다.',
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    setNotice(null);
+
+    axios
+      .get('http://localhost:8000/analysis-records', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+      .then((response) => {
+        if (response.data.success) {
+          setRecords(response.data.records || []);
+        }
+      })
+      .catch((error) => {
+        console.error('분석 기록 불러오기 실패:', error);
+        setNotice({
+          type: 'error',
+          text: '분석 기록을 불러오지 못했습니다.',
+        });
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [accessToken]);
+
+  const openRecord = async (recordId) => {
+    try {
+      const response = await axios.get(
+        `http://localhost:8000/analysis-records/${recordId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+      if (response.data.success) {
+        setAnalysisResult(response.data.record.result_json);
+        setCurrentPage('result');
+      }
+    } catch (error) {
+      console.error('분석 기록 상세 조회 실패:', error);
+      setNotice({
+        type: 'error',
+        text: '분석 기록 상세 내용을 불러오지 못했습니다.',
+      });
+    }
+  };
+
   return (
     <section className="page">
       <PageTitle
         title="분석 기록"
-        description="이번 세션에서 분석한 공고 결과를 기록 카드로 확인합니다."
+        description="저장된 공고 분석 결과를 다시 확인할 수 있습니다."
       />
 
-      {analysisResult ? (
+      {notice && <Notice type={notice.type}>{notice.text}</Notice>}
+
+      {isLoading ? (
+        <div className="card">
+          <p>분석 기록을 불러오는 중입니다...</p>
+        </div>
+      ) : records.length > 0 ? (
+        <div className="history-list">
+          {records.map((record) => (
+            <div className="history-card" key={record.id}>
+              <div>
+                <span className="badge subtle">
+                  {record.posting_type || '분석 결과'}
+                </span>
+                <h3>{record.posting_title || '공고명 미확인'}</h3>
+                <p>
+                  종합 적합도 {record.total_score ?? '-'}% · 분석일{' '}
+                  {record.created_at
+                    ? new Date(record.created_at).toLocaleDateString()
+                    : '미확인'}
+                </p>
+              </div>
+
+              <button
+                className="secondary"
+                onClick={() => openRecord(record.id)}
+              >
+                다시 보기
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : analysisResult ? (
         <div className="history-card">
           <div>
             <span className="badge subtle">
@@ -944,8 +1339,7 @@ function HistoryPage({ setCurrentPage, analysisResult }) {
             </span>
             <h3>{analysisResult.posting_title || '공고명 미확인'}</h3>
             <p>
-              종합 적합도 {analysisResult.total_score ?? '-'}% · 마감일{' '}
-              {analysisResult.deadline || '미확인'}
+              종합 적합도 {analysisResult.total_score ?? '-'}% · 이번 세션 분석
             </p>
           </div>
           <button
@@ -1114,11 +1508,12 @@ function SectionHeader({ title, eyebrow, description }) {
   );
 }
 
-function Input({ label, placeholder, value, onChange }) {
+function Input({ label, placeholder, value, onChange, type = 'text' }) {
   return (
     <label className="field">
       <span>{label}</span>
       <input
+        type={type}
         placeholder={placeholder}
         value={value || ''}
         onChange={onChange}
@@ -1256,6 +1651,33 @@ function EmptyState({ title, description, actionLabel, onAction }) {
           {actionLabel}
         </button>
       )}
+    </div>
+  );
+}
+
+function ConfirmModal({
+  title,
+  description,
+  confirmText = '확인',
+  cancelText = '취소',
+  onConfirm,
+  onCancel,
+}) {
+  return (
+    <div className="modal-backdrop">
+      <div className="confirm-modal">
+        <h2>{title}</h2>
+        <p>{description}</p>
+
+        <div className="modal-actions">
+          <button className="secondary" onClick={onCancel}>
+            {cancelText}
+          </button>
+          <button className="primary" onClick={onConfirm}>
+            {confirmText}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

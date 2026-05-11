@@ -10,6 +10,16 @@ import json
 import re
 import requests
 from bs4 import BeautifulSoup
+from sqlalchemy import text
+from database import engine
+from fastapi import Depends, Header, HTTPException
+from sqlalchemy.orm import Session
+
+from database import Base, engine, get_db
+from models import User, Profile, AnalysisRecord
+from schemas import UserCreate, UserLogin, TokenResponse, ProfileSave, AnalysisRecordCreate
+from auth import hash_password, verify_password, create_access_token, decode_access_token
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 load_dotenv()
 
@@ -20,6 +30,7 @@ if GEMINI_API_KEY:
 
 
 app = FastAPI()
+Base.metadata.create_all(bind=engine)
 
 app.add_middleware(
     CORSMiddleware,
@@ -132,6 +143,32 @@ def extract_text_from_url(url: str) -> str:
         print("URL 텍스트 추출 오류:", e)
         return ""
 
+security = HTTPBearer()
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    token = credentials.credentials
+
+    payload = decode_access_token(token)
+
+    if not payload:
+        raise HTTPException(status_code=401, detail="토큰이 유효하지 않습니다.")
+
+    user_id = payload.get("user_id")
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="토큰에 사용자 정보가 없습니다.")
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+
+    return user
+
 
 @app.get("/")
 def root():
@@ -144,10 +181,178 @@ def health_check():
 
 
 @app.post("/profiles")
-def save_profile(profile: ProfileRequest):
+def save_profile(
+    profile_data: ProfileSave,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    existing_profile = db.query(Profile).filter(
+        Profile.user_id == current_user.id
+    ).first()
+
+    if existing_profile:
+        existing_profile.status = profile_data.status
+        existing_profile.major = profile_data.major
+        existing_profile.interest_fields = profile_data.interest_fields
+        existing_profile.goal_activities = profile_data.goal_activities
+        existing_profile.capabilities = profile_data.capabilities
+        existing_profile.experience_types = profile_data.experience_types
+        existing_profile.experiences = profile_data.experiences
+
+        db.commit()
+        db.refresh(existing_profile)
+
+        saved_profile = existing_profile
+        message = "사용자 정보가 수정되었습니다."
+    else:
+        new_profile = Profile(
+            user_id=current_user.id,
+            status=profile_data.status,
+            major=profile_data.major,
+            interest_fields=profile_data.interest_fields,
+            goal_activities=profile_data.goal_activities,
+            capabilities=profile_data.capabilities,
+            experience_types=profile_data.experience_types,
+            experiences=profile_data.experiences
+        )
+
+        db.add(new_profile)
+        db.commit()
+        db.refresh(new_profile)
+
+        saved_profile = new_profile
+        message = "사용자 정보가 저장되었습니다."
+
     return {
-        "message": "사용자 정보가 임시 저장되었습니다.",
-        "profile": profile
+        "message": message,
+        "profile": {
+            "status": saved_profile.status,
+            "major": saved_profile.major,
+            "interest_fields": saved_profile.interest_fields or [],
+            "goal_activities": saved_profile.goal_activities or [],
+            "capabilities": saved_profile.capabilities or [],
+            "experience_types": saved_profile.experience_types or [],
+            "experiences": saved_profile.experiences
+        }
+    }
+
+@app.get("/profiles/me")
+def get_my_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    profile = db.query(Profile).filter(
+        Profile.user_id == current_user.id
+    ).first()
+
+    if not profile:
+        return {
+            "success": False,
+            "message": "저장된 사용자 정보가 없습니다.",
+            "profile": None
+        }
+
+    return {
+        "success": True,
+        "profile": {
+            "status": profile.status,
+            "major": profile.major,
+            "interest_fields": profile.interest_fields or [],
+            "goal_activities": profile.goal_activities or [],
+            "capabilities": profile.capabilities or [],
+            "experience_types": profile.experience_types or [],
+            "experiences": profile.experiences
+        }
+    }
+
+@app.post("/analysis-records")
+def save_analysis_record(
+    record_data: AnalysisRecordCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    new_record = AnalysisRecord(
+        user_id=current_user.id,
+        posting_title=record_data.posting_title,
+        posting_type=record_data.posting_type,
+        posting_text=record_data.posting_text,
+        total_score=record_data.total_score,
+        result_json=record_data.result_json
+    )
+
+    db.add(new_record)
+    db.commit()
+    db.refresh(new_record)
+
+    return {
+        "success": True,
+        "message": "분석 결과가 저장되었습니다.",
+        "record": {
+            "id": new_record.id,
+            "posting_title": new_record.posting_title,
+            "posting_type": new_record.posting_type,
+            "total_score": new_record.total_score,
+            "created_at": new_record.created_at,
+            "result_json": new_record.result_json
+        }
+    }
+
+@app.get("/analysis-records")
+def get_analysis_records(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    records = (
+        db.query(AnalysisRecord)
+        .filter(AnalysisRecord.user_id == current_user.id)
+        .order_by(AnalysisRecord.created_at.desc())
+        .all()
+    )
+
+    return {
+        "success": True,
+        "records": [
+            {
+                "id": record.id,
+                "posting_title": record.posting_title,
+                "posting_type": record.posting_type,
+                "total_score": record.total_score,
+                "created_at": record.created_at,
+                "result_json": record.result_json
+            }
+            for record in records
+        ]
+    }
+
+@app.get("/analysis-records/{record_id}")
+def get_analysis_record_detail(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    record = (
+        db.query(AnalysisRecord)
+        .filter(
+            AnalysisRecord.id == record_id,
+            AnalysisRecord.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not record:
+        raise HTTPException(status_code=404, detail="분석 기록을 찾을 수 없습니다.")
+
+    return {
+        "success": True,
+        "record": {
+            "id": record.id,
+            "posting_title": record.posting_title,
+            "posting_type": record.posting_type,
+            "posting_text": record.posting_text,
+            "total_score": record.total_score,
+            "created_at": record.created_at,
+            "result_json": record.result_json
+        }
     }
 
 @app.post("/postings/url")
@@ -242,7 +447,11 @@ def create_mock_analysis(request: AnalysisMockRequest):
     }
 
 @app.post("/analysis/gemini")
-def create_gemini_analysis(request: AnalysisGeminiRequest):
+def create_gemini_analysis(
+    request: AnalysisGeminiRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     if not GEMINI_API_KEY:
         return {
             "success": False,
@@ -326,6 +535,12 @@ def create_gemini_analysis(request: AnalysisGeminiRequest):
 - 사용자 정보가 부족하면 사용자 준비도 점수를 보수적으로 부여해라.
 - 공고 요구 수준보다 사용자 준비도가 훨씬 높다고 판단되는 경우에도, 명확한 근거가 없으면 사용자 점수를 과도하게 높이지 마라.
 
+문장 표현 규칙:
+- 결과 문장에서는 "사용자"라는 표현을 되도록 사용하지 마라.
+- "지원자", "현재 입력된 정보", "입력된 프로필", "보유 역량" 같은 표현을 사용해라.
+- 예: "사용자는 정보보호학 전공자로..." 대신 "정보보호학 전공과 보안 분야 관심은 공고와 잘 맞지만..."처럼 자연스럽게 작성해라.
+- 분석 결과는 서비스 화면에 바로 표시될 문장이므로 딱딱한 평가문보다 사용자 친화적인 문장으로 작성해라.
+
 분야 확장 규칙:
 - 새로운 분야가 등장해도 평가 축은 유지한다.
 - 해당 분야에서 활동 수행에 필요한 기초 역량, 관련 경험, 성장 방향, 준비 일정을 공고 내용에서 추론한다.
@@ -344,12 +559,6 @@ def create_gemini_analysis(request: AnalysisGeminiRequest):
 - JSON 앞뒤에 설명 문장을 붙이지 마라.
 - 모든 점수는 0~100 사이의 정수로 작성해라.
 - 배열에는 사용자가 이해할 수 있는 짧은 한국어 문장을 넣어라.
-
-문장 표현 규칙:
-- 결과 문장에서는 "사용자"라는 표현을 되도록 사용하지 마라.
-- "지원자", "현재 입력된 정보", "입력된 프로필", "보유 역량" 같은 표현을 사용해라.
-- 예: "사용자는 정보보호학 전공자로..." 대신 "정보보호학 전공과 보안 분야 관심은 공고와 잘 맞지만..."처럼 자연스럽게 작성해라.
-- 분석 결과는 서비스 화면에 바로 표시될 문장이므로 딱딱한 평가문보다 사용자 친화적인 문장으로 작성해라.
 
 아래 JSON 형식으로만 응답해라.
 
@@ -479,8 +688,23 @@ def create_gemini_analysis(request: AnalysisGeminiRequest):
             }
         }
 
+        new_record = AnalysisRecord(
+            user_id=current_user.id,
+            posting_title=analysis["posting_title"],
+            posting_type=analysis["posting_type"],
+            posting_text=request.posting_text,
+            total_score=analysis["total_score"],
+            result_json=analysis
+        )
+
+        db.add(new_record)
+        db.commit()
+        db.refresh(new_record)
+
         return {
             "success": True,
+            "message": "Gemini 분석 결과가 저장되었습니다.",
+            "record_id": new_record.id,
             "analysis": analysis
         }
 
@@ -573,3 +797,82 @@ def gemini_test():
             "success": False,
             "message": str(e)
         }
+    
+
+@app.get("/db/test")
+def db_test():
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT 1"))
+            value = result.scalar()
+
+        return {
+            "success": True,
+            "message": "DB 연결 성공",
+            "result": value
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "message": str(e)
+        }
+    
+@app.post("/auth/register")
+def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.email == user_data.email).first()
+
+    if existing_user:
+        raise HTTPException(status_code=400, detail="이미 가입된 이메일입니다.")
+
+    new_user = User(
+        email=user_data.email,
+        password_hash=hash_password(user_data.password)
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    access_token = create_access_token({
+        "user_id": new_user.id,
+        "email": new_user.email
+    })
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": new_user.id,
+        "email": new_user.email
+    }
+
+
+@app.post("/auth/login")
+def login(user_data: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == user_data.email).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
+
+    if not verify_password(user_data.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
+
+    access_token = create_access_token({
+        "user_id": user.id,
+        "email": user.email
+    })
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": user.id,
+        "email": user.email
+    }
+
+
+@app.get("/auth/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email
+    }
