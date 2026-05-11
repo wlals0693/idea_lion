@@ -472,6 +472,12 @@ def create_gemini_analysis(
 - 너는 공고 요구 수준과 사용자 준비도를 각각 0~100점으로 평가한다.
 - 최종 적합도 계산은 백엔드 코드에서 한다.
 
+- 사용자 준비도(user_score)가 공고 요구 수준(required_score)보다 낮으면 해당 항목 score는 90점 이상 줄 수 없다.
+- 명시되지 않은 역량은 보유한 것으로 추정하지 않는다.
+- 포트폴리오/자기소개서/제출물 준비 상태가 불명확하면 schedule은 최대 85점으로 제한한다.
+- 경험의 구체성이 부족하면 experience는 최대 80점으로 제한한다.
+- total_score 90점 이상은 모든 항목에서 강한 근거가 있을 때만 허용한다.
+
 분석 대상:
 공고명: {request.posting_title}
 공고 유형: {request.posting_type}

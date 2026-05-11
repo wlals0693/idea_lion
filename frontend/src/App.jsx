@@ -636,6 +636,7 @@ function PostingPage({
   const [url, setUrl] = useState('');
   const [postingMessage, setPostingMessage] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isAnalysisDone, setIsAnalysisDone] = useState(false);
 
   const submitPostingUrl = async () => {
     if (!url.trim()) {
@@ -653,6 +654,7 @@ function PostingPage({
 
     setIsAnalyzing(true);
     setPostingMessage(null);
+    setIsAnalysisDone(false);
 
     try {
       const postingResponse = await axios.post(`${API_BASE_URL}/postings/url`, {
@@ -693,7 +695,11 @@ function PostingPage({
 
       if (analysisResponse.data.success) {
         setAnalysisResult(analysisResponse.data.analysis);
-        setCurrentPage('loading');
+        setIsAnalysisDone(true);
+        setMessage({
+          type: 'success',
+          text: '분석이 완료되었습니다. 결과 화면에서 자세한 리포트를 확인할 수 있습니다.',
+        });
       } else {
         setPostingMessage({
           type: 'error',
@@ -760,6 +766,15 @@ function PostingPage({
             {isAnalyzing ? 'AI가 공고를 분석 중입니다...' : 'URL로 분석 시작'}
           </button>
 
+          {isAnalysisDone && (
+            <button
+              className="primary"
+              onClick={() => setCurrentPage('result')}
+            >
+              분석 결과 보기
+            </button>
+          )}
+
           <button
             className="secondary"
             onClick={() => setCurrentPage('postingText')}
@@ -786,6 +801,7 @@ function PostingTextPage({
   const [pdfFile, setPdfFile] = useState(null);
   const [message, setMessage] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isAnalysisDone, setIsAnalysisDone] = useState(false);
 
   const handleChange = (field, value) => {
     setPostingForm({
@@ -839,6 +855,7 @@ function PostingTextPage({
 
     setIsAnalyzing(true);
     setMessage(null);
+    setIsAnalysisDone(false);
 
     try {
       if (pdfFile) {
@@ -998,6 +1015,15 @@ function PostingTextPage({
           >
             {isAnalyzing ? 'AI가 공고를 분석 중입니다...' : '분석 시작하기'}
           </button>
+
+          {isAnalysisDone && (
+            <button
+              className="primary"
+              onClick={() => setCurrentPage('result')}
+            >
+              분석 결과 보기
+            </button>
+          )}
 
           <button
             className="secondary"
