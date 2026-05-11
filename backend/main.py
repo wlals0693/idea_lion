@@ -517,6 +517,15 @@ def create_gemini_analysis(
 - 마감일이 불명확하면 schedule 점수는 보수적으로 평가해라.
 - 사용자 일정 정보가 부족하면 추정 기반으로 평가하고, 너무 높은 점수를 주지 마라.
 
+중요한 점수 제한 규칙:
+- user_score가 required_score보다 낮거나 같으면 해당 항목 score는 90점을 초과할 수 없다.
+- user_score와 required_score가 모두 70 이하이면 해당 항목 score는 80점을 초과할 수 없다.
+- 사용자의 구체적 경험이 부족하면 experience score는 최대 80점이다.
+- 제출 서류 준비 상태가 명확하지 않으면 schedule score는 최대 85점이다.
+- total_score가 90점 이상이 되려면 capability, experience, growth, schedule 네 항목 모두 강한 근거가 있어야 한다.
+- 단순 관심, 전공 일치만으로 100점을 주지 마라.
+- 100점은 공고 요구사항을 거의 모두 충족하고 추가 우대사항까지 명확히 충족할 때만 사용한다.
+
 공고 요구 수준 점수 기준:
 - 0~30점: 누구나 참여 가능, 경험 무관, 단순 신청형 활동
 - 31~50점: 관심 분야 기초 이해가 있으면 참여 가능
