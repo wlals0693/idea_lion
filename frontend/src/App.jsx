@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import './App.css';
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 const scoreWeights = [
   { key: 'capability', label: '기초 역량', weight: 40 },
   { key: 'experience', label: '활동 경험', weight: 30 },
@@ -56,7 +59,7 @@ function App() {
   const [loginRequiredPage, setLoginRequiredPage] = useState(null);
 
   useEffect(() => {
-    axios.get('http://localhost:8000/health').catch(() => {
+    axios.get(`${API_BASE_URL}/health`).catch(() => {
       console.warn('Health check failed.');
     });
   }, []);
@@ -71,7 +74,7 @@ function App() {
     }
 
     axios
-      .get('http://localhost:8000/profiles/me', {
+      .get(`${API_BASE_URL}/profiles/me`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
@@ -307,8 +310,8 @@ function AuthPage({
     try {
       const endpoint =
         mode === 'login'
-          ? 'http://localhost:8000/auth/login'
-          : 'http://localhost:8000/auth/register';
+          ? `${API_BASE_URL}/auth/login`
+          : `${API_BASE_URL}/auth/register`;
 
       const response = await axios.post(endpoint, {
         email: form.email,
@@ -447,15 +450,11 @@ function ProfilePage({ setCurrentPage, setSavedProfile, accessToken }) {
     };
 
     try {
-      const response = await axios.post(
-        'http://localhost:8000/profiles',
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
+      const response = await axios.post(`${API_BASE_URL}/profiles`, payload, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
         },
-      );
+      });
 
       console.log('저장 응답:', response.data);
       setSavedProfile(response.data.profile);
@@ -656,13 +655,10 @@ function PostingPage({
     setPostingMessage(null);
 
     try {
-      const postingResponse = await axios.post(
-        'http://localhost:8000/postings/url',
-        {
-          user_id: 1,
-          url: url,
-        },
-      );
+      const postingResponse = await axios.post(`${API_BASE_URL}/postings/url`, {
+        user_id: 1,
+        url: url,
+      });
 
       console.log('공고 URL 응답:', postingResponse.data);
 
@@ -679,7 +675,7 @@ function PostingPage({
       const posting = postingResponse.data.posting;
 
       const analysisResponse = await axios.post(
-        'http://localhost:8000/analysis/gemini',
+        `${API_BASE_URL}/analysis/gemini`,
         {
           user_profile: savedProfile,
           posting_title: posting.title,
@@ -808,7 +804,7 @@ function PostingTextPage({
     }
 
     const analysisResponse = await axios.post(
-      'http://localhost:8000/analysis/gemini',
+      `${API_BASE_URL}/analysis/gemini`,
       {
         user_profile: savedProfile,
         posting_title: posting.title,
@@ -853,7 +849,7 @@ function PostingTextPage({
         formData.append('file', pdfFile);
 
         const pdfResponse = await axios.post(
-          'http://localhost:8000/postings/pdf',
+          `${API_BASE_URL}/postings/pdf`,
           formData,
           {
             headers: {
@@ -885,15 +881,12 @@ function PostingTextPage({
         return;
       }
 
-      const textResponse = await axios.post(
-        'http://localhost:8000/postings/text',
-        {
-          user_id: 1,
-          title: postingForm.title,
-          posting_type: postingForm.posting_type,
-          content: postingForm.content,
-        },
-      );
+      const textResponse = await axios.post(`${API_BASE_URL}/postings/text`, {
+        user_id: 1,
+        title: postingForm.title,
+        posting_type: postingForm.posting_type,
+        content: postingForm.content,
+      });
 
       console.log('공고 텍스트 응답:', textResponse.data);
 
@@ -1231,7 +1224,7 @@ function HistoryPage({
     setNotice(null);
 
     axios
-      .get('http://localhost:8000/analysis-records', {
+      .get(`${API_BASE_URL}/analysis-records`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
@@ -1256,7 +1249,7 @@ function HistoryPage({
   const openRecord = async (recordId) => {
     try {
       const response = await axios.get(
-        `http://localhost:8000/analysis-records/${recordId}`,
+        `${API_BASE_URL}/analysis-records/${recordId}`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
