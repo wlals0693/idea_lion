@@ -696,7 +696,7 @@ function PostingPage({
       if (analysisResponse.data.success) {
         setAnalysisResult(analysisResponse.data.analysis);
         setIsAnalysisDone(true);
-        setMessage({
+        setPostingMessage({
           type: 'success',
           text: '분석이 완료되었습니다. 결과 화면에서 자세한 리포트를 확인할 수 있습니다.',
         });
@@ -838,7 +838,11 @@ function PostingTextPage({
 
     if (analysisResponse.data.success) {
       setAnalysisResult(analysisResponse.data.analysis);
-      setCurrentPage('loading');
+      setIsAnalysisDone(true);
+      setMessage({
+        type: 'success',
+        text: '분석이 완료되었습니다. 결과 화면에서 자세한 리포트를 확인할 수 있습니다.',
+      });
     } else {
       setMessage({
         type: 'error',
