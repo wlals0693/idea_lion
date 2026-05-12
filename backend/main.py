@@ -862,7 +862,7 @@ async def create_posting_by_pdf(
             "posting_type": posting_type,
             "file_name": file.filename,
             "file_size": len(file_content),
-            "extracted_text": extracted_text[:3000]
+            "extracted_text": extracted_text[:5000]
         }
     }
 
