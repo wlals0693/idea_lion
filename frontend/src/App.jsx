@@ -12,6 +12,84 @@ const scoreWeights = [
   { key: 'schedule', label: '준비 일정', weight: 15 },
 ];
 
+const capabilityOptionsByField = {
+  'IT/개발': [
+    'Python',
+    'JavaScript',
+    'React',
+    'HTML/CSS',
+    'GitHub',
+    '웹 개발',
+    '앱 개발',
+    '팀 프로젝트',
+  ],
+  '보안/네트워크': [
+    'Linux',
+    '네트워크 기초',
+    'CTF',
+    '웹 취약점',
+    '보안 동아리',
+    '보안 스터디',
+    '침해 대응 기초',
+    '패킷 분석',
+  ],
+  'AI/데이터': [
+    'Python',
+    '데이터 분석',
+    '머신러닝 기초',
+    'Pandas',
+    'SQL',
+    '데이터 시각화',
+    'AI 모델 활용',
+  ],
+  디자인: [
+    'Figma',
+    'Photoshop',
+    'Illustrator',
+    'UX/UI',
+    '포트폴리오',
+    '프로토타입 제작',
+    '카드뉴스 디자인',
+  ],
+  '마케팅/콘텐츠': [
+    'SNS 운영',
+    '콘텐츠 기획',
+    '카드뉴스 제작',
+    '영상 편집',
+    '카피라이팅',
+    '홍보 기획',
+    '블로그 운영',
+  ],
+  '교육/멘토링': [
+    '멘토링',
+    '교육 봉사',
+    '아동 지도',
+    '청소년 지도',
+    '수업 보조',
+    '발표 능력',
+    '상담 경험',
+    '소통 능력',
+  ],
+  '기획/창업': [
+    '서비스 기획',
+    '문제 정의',
+    '시장 조사',
+    '사업계획서',
+    '피치덱 제작',
+    '발표 능력',
+    '아이디어 제안',
+  ],
+  '봉사/사회문제': [
+    '봉사활동',
+    '캠페인 기획',
+    '사회문제 조사',
+    '현장 활동',
+    '공익 콘텐츠 제작',
+    '팀 활동',
+    '소통 능력',
+  ],
+};
+
 function App() {
   const [currentPage, setCurrentPage] = useState(
     () => localStorage.getItem('fitcheckPage') || 'home',
@@ -96,6 +174,7 @@ function App() {
           <ProfilePage
             setCurrentPage={setCurrentPage}
             setSavedProfile={setSavedProfile}
+            savedProfile={savedProfile}
             accessToken={accessToken}
           />
         );
@@ -128,7 +207,11 @@ function App() {
         );
       case 'mypage':
         return (
-          <MyPage setCurrentPage={setCurrentPage} savedProfile={savedProfile} />
+          <MyPage
+            setCurrentPage={setCurrentPage}
+            savedProfile={savedProfile}
+            analysisResult={analysisResult}
+          />
         );
       case 'postingText':
         return (
@@ -166,7 +249,7 @@ function App() {
       {loginRequiredPage && currentPage !== 'auth' && (
         <ConfirmModal
           title="로그인이 필요합니다"
-          description="내 정보 저장, 공고 분석, 분석 기록 확인은 로그인 후 이용할 수 있습니다."
+          description="스펙 저장, 공고 분석, 분석 기록 확인은 로그인 후 이용할 수 있습니다."
           confirmText="로그인하기"
           cancelText="닫기"
           onConfirm={() => {
@@ -184,7 +267,7 @@ function App() {
 function Header({ currentPage, setCurrentPage, authUser, logout }) {
   const menus = [
     { id: 'home', label: '홈' },
-    { id: 'profile', label: '내 정보' },
+    { id: 'profile', label: '스펙 입력' },
     { id: 'posting', label: '공고 분석' },
     { id: 'history', label: '분석 기록' },
     { id: 'mypage', label: '마이페이지' },
@@ -226,7 +309,7 @@ function Header({ currentPage, setCurrentPage, authUser, logout }) {
 
 function HomePage({ setCurrentPage }) {
   const steps = [
-    ['01', '내 정보 입력', '관심 분야와 활동 경험을 정리합니다.'],
+    ['01', '스펙 입력', '관심 분야와 활동 경험을 정리합니다.'],
     ['02', '공고 입력', 'URL, PDF, 텍스트 중 편한 방식으로 넣습니다.'],
     ['03', 'AI 분석', '공고 요구사항과 나의 준비도를 비교합니다.'],
     ['04', '전략 확인', '보완할 점과 다음 액션을 확인합니다.'],
@@ -248,7 +331,7 @@ function HomePage({ setCurrentPage }) {
               className="primary"
               onClick={() => setCurrentPage('profile')}
             >
-              내 정보 입력하기
+              내 스펙 입력하기
             </button>
             <button
               className="secondary"
@@ -358,14 +441,14 @@ function AuthPage({
     <section className="page compact-page">
       <PageTitle
         title={mode === 'login' ? '로그인' : '회원가입'}
-        description="내 정보와 분석 기록을 저장하려면 로그인이 필요합니다."
+        description="내 스펙과 분석 기록을 저장하려면 로그인이 필요합니다."
       />
 
       <div className="card narrow">
         <SectionHeader
           title={mode === 'login' ? '계정 로그인' : '새 계정 만들기'}
           eyebrow="Account"
-          description="분석 기록과 내 정보를 안전하게 저장합니다."
+          description="분석 기록과 내 스펙을 안전하게 저장합니다."
         />
 
         {notice && <Notice type={notice.type}>{notice.message}</Notice>}
@@ -411,7 +494,12 @@ function AuthPage({
   );
 }
 
-function ProfilePage({ setCurrentPage, setSavedProfile, accessToken }) {
+function ProfilePage({
+  setCurrentPage,
+  setSavedProfile,
+  savedProfile,
+  accessToken,
+}) {
   const [profile, setProfile] = useState({
     status: '',
     major: '',
@@ -422,6 +510,15 @@ function ProfilePage({ setCurrentPage, setSavedProfile, accessToken }) {
   const [capabilities, setCapabilities] = useState([]);
   const [experienceTypes, setExperienceTypes] = useState([]);
   const [notice, setNotice] = useState(null);
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+
+  const availableCapabilities = useMemo(() => {
+    const merged = interestFields.flatMap(
+      (field) => capabilityOptionsByField[field] || [],
+    );
+
+    return [...new Set(merged)];
+  }, [interestFields]);
 
   const toggleItem = (list, setList, item) => {
     if (list.includes(item)) {
@@ -430,6 +527,34 @@ function ProfilePage({ setCurrentPage, setSavedProfile, accessToken }) {
       setList([...list, item]);
     }
   };
+
+  useEffect(() => {
+    if (interestFields.length === 0) {
+      setCapabilities([]);
+      return;
+    }
+
+    setCapabilities((prev) =>
+      prev.filter((item) => availableCapabilities.includes(item)),
+    );
+  }, [interestFields, availableCapabilities]);
+
+  useEffect(() => {
+    if (!savedProfile) {
+      return;
+    }
+
+    setProfile({
+      status: savedProfile.status || '',
+      major: savedProfile.major || '',
+      experiences: savedProfile.experiences || '',
+    });
+
+    setInterestFields(savedProfile.interest_fields || []);
+    setGoalActivities(savedProfile.goal_activities || []);
+    setCapabilities(savedProfile.capabilities || []);
+    setExperienceTypes(savedProfile.experience_types || []);
+  }, [savedProfile]);
 
   const handleChange = (field, value) => {
     setProfile({
@@ -460,8 +585,9 @@ function ProfilePage({ setCurrentPage, setSavedProfile, accessToken }) {
       setSavedProfile(response.data.profile);
       setNotice({
         type: 'success',
-        message: '내 정보가 저장되었습니다. 이제 공고 분석을 시작할 수 있어요.',
+        message: '스펙 정보가 저장되었습니다.',
       });
+      setIsSaveModalOpen(true);
     } catch (error) {
       console.error(error);
       setNotice({
@@ -474,8 +600,8 @@ function ProfilePage({ setCurrentPage, setSavedProfile, accessToken }) {
   return (
     <section className="page">
       <PageTitle
-        title="내 정보 입력"
-        description="관심 분야와 활동 경험을 입력하면 공고와의 적합도를 더 정확하게 볼 수 있습니다."
+        title="스펙 입력"
+        description="전공, 활동 경험, 보유 역량을 입력하면 공고 요구사항과 현재 준비도를 비교할 수 있습니다."
       />
 
       {notice && <Notice type={notice.type}>{notice.message}</Notice>}
@@ -548,28 +674,20 @@ function ProfilePage({ setCurrentPage, setSavedProfile, accessToken }) {
               eyebrow="Skills"
               description="공고 요구 조건과 비교할 수 있는 강점을 선택하세요."
             />
-            <ChipGroup
-              title="역량 선택"
-              chips={[
-                '교육 봉사',
-                '멘토링',
-                '아동 지도',
-                '청소년 지도',
-                '수업 보조',
-                '교구 제작',
-                '발표 능력',
-                '소통 능력',
-                '상담 경험',
-                'Python',
-                'Linux',
-                'Figma',
-                'SNS 운영',
-              ]}
-              selectedItems={capabilities}
-              onToggle={(item) =>
-                toggleItem(capabilities, setCapabilities, item)
-              }
-            />
+            {interestFields.length === 0 ? (
+              <Notice type="info">
+                관심 분야를 먼저 선택하면 관련 역량을 선택할 수 있습니다.
+              </Notice>
+            ) : (
+              <ChipGroup
+                title="역량 선택"
+                chips={availableCapabilities}
+                selectedItems={capabilities}
+                onToggle={(item) =>
+                  toggleItem(capabilities, setCapabilities, item)
+                }
+              />
+            )}
           </section>
 
           <section className="card">
@@ -617,12 +735,27 @@ function ProfilePage({ setCurrentPage, setSavedProfile, accessToken }) {
 
       <div className="page-actions">
         <button className="secondary" onClick={saveProfile}>
-          내 정보 저장
+          내 스펙 저장
         </button>
         <button className="primary" onClick={() => setCurrentPage('posting')}>
           공고 분석으로 이동
         </button>
       </div>
+      {isSaveModalOpen && (
+        <ConfirmModal
+          title="스펙 정보가 저장되었습니다"
+          description="이제 입력한 스펙을 바탕으로 공고와의 지원 준비도를 분석할 수 있습니다."
+          confirmText="공고 분석하기"
+          cancelText="계속 수정하기"
+          onConfirm={() => {
+            setIsSaveModalOpen(false);
+            setCurrentPage('posting');
+          }}
+          onCancel={() => {
+            setIsSaveModalOpen(false);
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -647,7 +780,7 @@ function PostingPage({
     if (!savedProfile) {
       setPostingMessage({
         type: 'error',
-        text: '내 정보를 먼저 저장해주세요. 사용자 정보가 있어야 정확한 분석이 가능합니다.',
+        text: '스펙을 먼저 저장해주세요. 사용자 정보가 있어야 정확한 분석이 가능합니다.',
       });
       return;
     }
@@ -728,7 +861,7 @@ function PostingPage({
         <SectionHeader
           title="URL로 공고 가져오기"
           eyebrow="Posting"
-          description="링크에서 공고 내용을 추출한 뒤 내 정보와 바로 비교합니다."
+          description="링크에서 공고 내용을 추출한 뒤 내 스펙과 바로 비교합니다."
         />
 
         <Input
@@ -814,7 +947,7 @@ function PostingTextPage({
     if (!savedProfile) {
       setMessage({
         type: 'error',
-        text: '내 정보를 먼저 저장해주세요. 사용자 정보가 있어야 정확한 분석이 가능합니다.',
+        text: '스펙을 먼저 저장해주세요. 사용자 정보가 있어야 정확한 분석이 가능합니다.',
       });
       return;
     }
@@ -1077,6 +1210,14 @@ function LoadingPage({ setCurrentPage }) {
 }
 
 function ResultPage({ setCurrentPage, analysisResult }) {
+  function getScoreStatus(score) {
+    if (score >= 90) return '높은 적합도';
+    if (score >= 75) return '지원 가능';
+    if (score >= 60) return '지원 전 보완 권장';
+    if (score >= 40) return '기초 보완 필요';
+    return '준비 부족';
+  }
+
   const scoreCards = useMemo(() => {
     if (!analysisResult?.scores) {
       return [];
@@ -1116,6 +1257,17 @@ function ResultPage({ setCurrentPage, analysisResult }) {
     );
   }
 
+  const totalScore = analysisResult.total_score ?? 0;
+  const totalScoreStatus = getScoreStatus(totalScore);
+  const confidenceText =
+    {
+      높음: '정보 충분',
+      보통: '일부 정보 기반',
+      낮음: '추가 정보 필요',
+    }[analysisResult.confidence] || '일부 정보 기반';
+  const recommendationStatus =
+    analysisResult.recommendation?.status || totalScoreStatus;
+
   return (
     <section className="page">
       <PageTitle
@@ -1126,18 +1278,24 @@ function ResultPage({ setCurrentPage, analysisResult }) {
       <div className="result-summary">
         <div className="result-main">
           <span className="badge">분석 완료</span>
-          <h2>{analysisResult.posting_title || '공고명 미확인'}</h2>
+          <h2>{recommendationStatus}</h2>
+          <p>
+            <strong>
+              총합 준비도 {analysisResult.total_score ?? '-'}% ·{' '}
+              {totalScoreStatus}
+            </strong>
+          </p>
           <p>{analysisResult.summary || '분석 요약이 제공되지 않았습니다.'}</p>
+          <p className="helper">
+            분석 공고: {analysisResult.posting_title || '공고명 미확인'}
+          </p>
         </div>
         <div className="result-metrics">
           <Metric
-            label="총합 적합도"
+            label="총합 준비도"
             value={`${analysisResult.total_score ?? '-'}%`}
           />
-          <Metric
-            label="분석 신뢰도"
-            value={analysisResult.confidence || '-'}
-          />
+          <Metric label="입력 정보 충분도" value={confidenceText} />
           <Metric
             label="공고 난이도"
             value={
@@ -1172,7 +1330,11 @@ function ResultPage({ setCurrentPage, analysisResult }) {
 
       <div className="score-grid">
         {scoreCards.map((card) => (
-          <ScoreCard key={card.key} card={card} />
+          <ScoreCard
+            key={card.key}
+            card={card}
+            scoreStatus={getScoreStatus(card.score ?? 0)}
+          />
         ))}
       </div>
 
@@ -1240,6 +1402,9 @@ function HistoryPage({
   const [records, setRecords] = useState([]);
   const [notice, setNotice] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('전체');
+  const [typeFilter, setTypeFilter] = useState('전체');
+  const [fieldFilter, setFieldFilter] = useState('전체');
 
   useEffect(() => {
     if (!accessToken) {
@@ -1276,6 +1441,85 @@ function HistoryPage({
       });
   }, [accessToken]);
 
+  const parseDeadline = (deadline) => {
+    if (!deadline) {
+      return null;
+    }
+
+    const text = String(deadline);
+    const dateParts = text.match(/\d+/g);
+
+    if (dateParts?.length >= 3) {
+      const [year, month, day] = dateParts.map(Number);
+      const parsedDate = new Date(year, month - 1, day);
+
+      if (
+        parsedDate.getFullYear() === year &&
+        parsedDate.getMonth() === month - 1 &&
+        parsedDate.getDate() === day
+      ) {
+        return parsedDate;
+      }
+    }
+
+    const fallbackDate = new Date(text);
+    return Number.isNaN(fallbackDate.getTime()) ? null : fallbackDate;
+  };
+
+  const getRecordStatus = (record) => {
+    const deadlineDate = parseDeadline(record.result_json?.deadline);
+
+    if (!deadlineDate) {
+      return '상태 미확인';
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    deadlineDate.setHours(0, 0, 0, 0);
+
+    return deadlineDate >= today ? '진행중' : '진행완';
+  };
+
+  const getStatusClass = (status) => {
+    if (status === '진행중') return 'active';
+    if (status === '진행완') return 'done';
+    return 'unknown';
+  };
+
+  const typeOptions = useMemo(
+    () => [
+      '전체',
+      ...new Set(records.map((record) => record.posting_type).filter(Boolean)),
+    ],
+    [records],
+  );
+  const fieldOptions = useMemo(
+    () => [
+      '전체',
+      ...new Set(
+        records
+          .map((record) => record.result_json?.field)
+          .filter(Boolean),
+      ),
+    ],
+    [records],
+  );
+  const filteredRecords = useMemo(
+    () =>
+      records.filter((record) => {
+        const recordStatus = getRecordStatus(record);
+        const statusMatched =
+          statusFilter === '전체' || recordStatus === statusFilter;
+        const typeMatched =
+          typeFilter === '전체' || record.posting_type === typeFilter;
+        const fieldMatched =
+          fieldFilter === '전체' || record.result_json?.field === fieldFilter;
+
+        return statusMatched && typeMatched && fieldMatched;
+      }),
+    [records, statusFilter, typeFilter, fieldFilter],
+  );
+
   const openRecord = async (recordId) => {
     try {
       const response = await axios.get(
@@ -1309,21 +1553,76 @@ function HistoryPage({
 
       {notice && <Notice type={notice.type}>{notice.text}</Notice>}
 
+      {records.length > 0 && (
+        <section className="card history-filter-card">
+          <div className="filter-row">
+            <label>
+              <span>진행 상태</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option>전체</option>
+                <option>진행중</option>
+                <option>진행완</option>
+                <option>상태 미확인</option>
+              </select>
+            </label>
+
+            <label>
+              <span>공고 유형</span>
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+              >
+                {typeOptions.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span>분야</span>
+              <select
+                value={fieldFilter}
+                onChange={(e) => setFieldFilter(e.target.value)}
+              >
+                {fieldOptions.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+      )}
+
       {isLoading ? (
         <div className="card">
           <p>분석 기록을 불러오는 중입니다...</p>
         </div>
-      ) : records.length > 0 ? (
+      ) : records.length > 0 && filteredRecords.length > 0 ? (
         <div className="history-list">
-          {records.map((record) => (
-            <div className="history-card" key={record.id}>
-              <div>
-                <span className="badge subtle">
-                  {record.posting_type || '분석 결과'}
-                </span>
+          {filteredRecords.map((record) => {
+            const recordStatus = getRecordStatus(record);
+            const recordField = record.result_json?.field;
+
+            return (
+              <div className="history-card" key={record.id}>
+                <div>
+                  <div className="history-badges">
+                    <span className="badge subtle">
+                      {record.posting_type || '분석 결과'}
+                    </span>
+                    <span
+                      className={`status-badge ${getStatusClass(recordStatus)}`}
+                    >
+                      {recordStatus}
+                    </span>
+                  </div>
                 <h3>{record.posting_title || '공고명 미확인'}</h3>
                 <p>
-                  종합 적합도 {record.total_score ?? '-'}% · 분석일{' '}
+                  종합 준비도 {record.total_score ?? '-'}%
+                  {recordField ? ` · 분야 ${recordField}` : ''} · 분석일{' '}
                   {record.created_at
                     ? new Date(record.created_at).toLocaleDateString()
                     : '미확인'}
@@ -1336,9 +1635,16 @@ function HistoryPage({
               >
                 다시 보기
               </button>
+              {/* TODO: 백엔드 삭제 API 추가 후 삭제 버튼 구현 */}
             </div>
-          ))}
+            );
+          })}
         </div>
+      ) : records.length > 0 ? (
+        <EmptyState
+          title="조건에 맞는 분석 기록이 없습니다."
+          description="필터를 변경하거나 전체 기록을 확인해보세요."
+        />
       ) : analysisResult ? (
         <div className="history-card">
           <div>
@@ -1369,24 +1675,34 @@ function HistoryPage({
   );
 }
 
-function MyPage({ setCurrentPage, savedProfile }) {
+function MyPage({ setCurrentPage, savedProfile, analysisResult }) {
   const tagSections = [
     ['관심 분야', savedProfile?.interest_fields],
     ['목표 활동', savedProfile?.goal_activities],
     ['역량', savedProfile?.capabilities],
     ['경험 유형', savedProfile?.experience_types],
   ];
+  const confidenceText =
+    {
+      높음: '정보 충분',
+      보통: '일부 정보 기반',
+      낮음: '추가 정보 필요',
+    }[analysisResult?.confidence] || '일부 정보 기반';
+  const weakItems = Object.values(analysisResult?.scores || {}).flatMap(
+    (score) => score.weak_factors || [],
+  );
+  const uniqueWeakItems = [...new Set(weakItems)];
 
   return (
     <section className="page">
       <PageTitle
         title="마이페이지"
-        description="저장된 내 정보와 준비 방향을 한눈에 확인합니다."
+        description="저장된 내 스펙과 준비 방향을 한눈에 확인합니다."
       />
 
       <div className="grid-2">
         <section className="card">
-          <SectionHeader title="내 프로필 요약" eyebrow="My profile" />
+          <SectionHeader title="스펙 요약" eyebrow="My profile" />
 
           {savedProfile ? (
             <>
@@ -1415,9 +1731,9 @@ function MyPage({ setCurrentPage, savedProfile }) {
             </>
           ) : (
             <EmptyState
-              title="저장된 내 정보가 없습니다."
-              description="내 정보를 입력하면 공고 분석 정확도가 올라갑니다."
-              actionLabel="내 정보 입력"
+              title="저장된 스펙이 없습니다."
+              description="스펙을 입력하면 공고 분석 정확도가 올라갑니다."
+              actionLabel="스펙 입력"
               onAction={() => setCurrentPage('profile')}
             />
           )}
@@ -1428,38 +1744,63 @@ function MyPage({ setCurrentPage, savedProfile }) {
                 className="secondary"
                 onClick={() => setCurrentPage('profile')}
               >
-                내 정보 수정하기
+                스펙 수정하기
               </button>
             </div>
           )}
         </section>
 
-        <section className="card growth-card">
-          <SectionHeader title="성장 방향 추천" eyebrow="Growth" />
-          {savedProfile ? (
+        <section className="card">
+          <SectionHeader title="최근 분석 결과" eyebrow="Recent result" />
+          {analysisResult ? (
             <>
-              <p>
-                지금은 지원 범위를 넓히기보다 선택한 관심 분야와 연결되는 경험을
-                하나씩 쌓는 것이 좋습니다.
-              </p>
-              <div className="growth-point">
-                {savedProfile.interest_fields?.length > 0
-                  ? `${savedProfile.interest_fields[0]} 분야의 실습형 활동이나 작은 프로젝트를 우선 탐색해보세요.`
-                  : '관심 분야를 추가하면 더 구체적인 성장 방향을 추천할 수 있습니다.'}
+              <div className="result-metrics">
+                <Metric
+                  label="최근 분석 공고명"
+                  value={analysisResult.posting_title || '공고명 미확인'}
+                />
+                <Metric
+                  label="총합 준비도"
+                  value={`${analysisResult.total_score ?? '-'}%`}
+                />
+                <Metric
+                  label="추천 상태"
+                  value={analysisResult.recommendation?.status || '-'}
+                />
+                <Metric
+                  label="공고 난이도"
+                  value={analysisResult.difficulty_level || '-'}
+                />
+                <Metric label="입력 정보 충분도" value={confidenceText} />
               </div>
-              <p className="helper">
-                분석 기록이 쌓이면 공고 난이도와 준비 기간을 더 정교하게 제안할
-                수 있습니다.
-              </p>
             </>
           ) : (
-            <p className="helper">
-              내 정보를 먼저 입력하면 현재 상태에 맞는 성장 방향을 확인할 수
-              있습니다.
-            </p>
+            <EmptyState
+              title="최근 분석 결과가 없습니다."
+              description="공고를 분석하면 최근 결과와 보완할 항목이 이곳에 표시됩니다."
+              actionLabel="공고 분석하기"
+              onAction={() => setCurrentPage('posting')}
+            />
           )}
         </section>
       </div>
+
+      {analysisResult && (
+        <section className="card weak-card">
+          <SectionHeader title="지원 전 보완할 항목" eyebrow="Needs" />
+          {uniqueWeakItems.length > 0 ? (
+            <ul className="clean-list">
+              {uniqueWeakItems.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="helper">
+              현재 분석 결과에서 뚜렷한 보완 항목이 확인되지 않았습니다.
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="card">
         <div className="calendar-head">
@@ -1475,6 +1816,24 @@ function MyPage({ setCurrentPage, savedProfile }) {
             </span>
           </div>
         </div>
+        {analysisResult ? (
+          <div className="summary-note">
+            <span>최근 분석 공고 기준 준비 일정</span>
+            <p>마감일: {analysisResult.deadline || '마감일 정보 없음'}</p>
+            <p>
+              추천 준비 기간:{' '}
+              {analysisResult.estimated_preparation_days
+                ? `${analysisResult.estimated_preparation_days}일`
+                : '정보 없음'}
+            </p>
+            <p>파란색은 추천 준비 기간, 빨간색은 공고 마감일입니다.</p>
+          </div>
+        ) : (
+          <p className="helper">
+            공고를 분석하면 추천 준비 기간과 마감일을 기준으로 캘린더를 확인할
+            수 있습니다.
+          </p>
+        )}
         <div className="calendar">
           {Array.from({ length: 30 }, (_, i) => (
             <div
@@ -1492,6 +1851,18 @@ function MyPage({ setCurrentPage, savedProfile }) {
           ))}
         </div>
       </section>
+
+      <div className="page-actions">
+        <button className="secondary" onClick={() => setCurrentPage('profile')}>
+          스펙 수정하기
+        </button>
+        <button className="primary" onClick={() => setCurrentPage('posting')}>
+          공고 분석하기
+        </button>
+        <button className="secondary" onClick={() => setCurrentPage('history')}>
+          분석 기록 보기
+        </button>
+      </div>
     </section>
   );
 }
@@ -1571,7 +1942,7 @@ function ChipGroup({ title, chips, selectedItems = [], onToggle }) {
   );
 }
 
-function ScoreCard({ card }) {
+function ScoreCard({ card, scoreStatus }) {
   const score = Number(card.score ?? 0);
 
   return (
@@ -1581,7 +1952,10 @@ function ScoreCard({ card }) {
           <span>{card.label}</span>
           <h2>{card.title || card.label}</h2>
         </div>
-        <strong>{card.score ?? '-'}%</strong>
+        <div>
+          <strong>{card.score ?? '-'}%</strong>
+          <span className="badge subtle">{scoreStatus}</span>
+        </div>
       </div>
       <div className="mini-bar">
         <div style={{ width: `${Math.min(score, 100)}%` }} />
