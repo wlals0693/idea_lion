@@ -320,11 +320,12 @@ function HomePage({ setCurrentPage }) {
       <div className="hero hero-simple">
         <div className="hero-copy">
           <span className="badge">AI 활동 적합도 분석</span>
-          <h1>지금 보고있는 공고 지원해도 될까요?</h1>
-          <p>
-            공고를 보고 고민만 하던 시간을 줄이고, 지금 지원해도 괜찮은지와
-            무엇을 보완하면 좋을지 빠르게 확인하세요.
-          </p>
+          <h1>
+            지금 보고있는 공고
+            <br /> 지원해도 될까요?
+            <br />
+          </h1>
+          <p>AI분석으로 지원해볼만한 공고인지 확인해보세요.</p>
 
           <div className="button-row">
             <button
