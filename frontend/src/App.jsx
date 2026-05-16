@@ -320,7 +320,7 @@ function HomePage({ setCurrentPage }) {
       <div className="hero hero-simple">
         <div className="hero-copy">
           <span className="badge">AI 활동 적합도 분석</span>
-          <h1>지금 보고있는 공고 지원하실건가요?</h1>
+          <h1>지금 보고있는 공고 지원해도 될까요?</h1>
           <p>
             공고를 보고 고민만 하던 시간을 줄이고, 지금 지원해도 괜찮은지와
             무엇을 보완하면 좋을지 빠르게 확인하세요.
@@ -1497,9 +1497,7 @@ function HistoryPage({
     () => [
       '전체',
       ...new Set(
-        records
-          .map((record) => record.result_json?.field)
-          .filter(Boolean),
+        records.map((record) => record.result_json?.field).filter(Boolean),
       ),
     ],
     [records],
@@ -1619,24 +1617,24 @@ function HistoryPage({
                       {recordStatus}
                     </span>
                   </div>
-                <h3>{record.posting_title || '공고명 미확인'}</h3>
-                <p>
-                  종합 준비도 {record.total_score ?? '-'}%
-                  {recordField ? ` · 분야 ${recordField}` : ''} · 분석일{' '}
-                  {record.created_at
-                    ? new Date(record.created_at).toLocaleDateString()
-                    : '미확인'}
-                </p>
-              </div>
+                  <h3>{record.posting_title || '공고명 미확인'}</h3>
+                  <p>
+                    종합 준비도 {record.total_score ?? '-'}%
+                    {recordField ? ` · 분야 ${recordField}` : ''} · 분석일{' '}
+                    {record.created_at
+                      ? new Date(record.created_at).toLocaleDateString()
+                      : '미확인'}
+                  </p>
+                </div>
 
-              <button
-                className="secondary"
-                onClick={() => openRecord(record.id)}
-              >
-                다시 보기
-              </button>
-              {/* TODO: 백엔드 삭제 API 추가 후 삭제 버튼 구현 */}
-            </div>
+                <button
+                  className="secondary"
+                  onClick={() => openRecord(record.id)}
+                >
+                  다시 보기
+                </button>
+                {/* TODO: 백엔드 삭제 API 추가 후 삭제 버튼 구현 */}
+              </div>
             );
           })}
         </div>
